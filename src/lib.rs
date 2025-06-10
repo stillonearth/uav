@@ -1,5 +1,6 @@
 use fast_ode;
 
+#[derive(Clone, Copy, Debug)]
 pub struct State {
     pub position_x: f64,
     pub position_y: f64,
@@ -15,6 +16,7 @@ pub struct State {
     pub yaw_rate: f64,
 }
 
+#[derive(Clone, Copy)]
 pub struct Consts {
     pub g: f64,
     pub mass: f64,
@@ -23,12 +25,14 @@ pub struct Consts {
     pub izz: f64,
 }
 
+#[derive(Clone, Copy)]
 pub struct Forces {
     pub x: f64,
     pub y: f64,
     pub z: f64,
 }
 
+#[derive(Clone, Copy)]
 pub struct Torques {
     pub x: f64,
     pub y: f64,
