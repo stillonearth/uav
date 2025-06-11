@@ -1,7 +1,8 @@
 # uav
 
-Accurate UAV dynamics and control in Rust.
+[![Crates.io](https://img.shields.io/crates/v/uav.svg)](https://crates.io/crates/uav)
+[![Crates.io](https://img.shields.io/crates/d/uav.svg)](https://crates.io/crates/uav)
 
-This package implements simple and accurate dynamical model for UAVs as well as a controller for such vehicle. Dynamics is done by integrating a system of differential equations for an UAV and contoller is a PID controller that integrates altitude, lateral, and body rate controllers.
+![image](https://github.com/user-attachments/assets/73c268e7-c24e-4b9b-99f1-75d68dcaffb9)
 
-Unfortunately physics engines (rapier, avian) couldn't simuilate dynamics of crazyflie, but this from-the-first principles approch works with best accuracy.
+Simple and accurate UAV dyanmics simulation and control.
