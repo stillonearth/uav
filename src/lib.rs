@@ -1,6 +1,6 @@
 use fast_ode;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct State {
     pub position_x: f64,
     pub position_y: f64,
