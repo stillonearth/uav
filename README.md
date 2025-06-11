@@ -5,4 +5,4 @@
 
 <img src="https://github.com/user-attachments/assets/73c268e7-c24e-4b9b-99f1-75d68dcaffb9" width="150">
 
-Simple and accurate UAV dynamics simulation and control.
+Simple and accurate UAV dynamics simulation and control in Rust.
