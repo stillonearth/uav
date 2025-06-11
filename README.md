@@ -1,3 +1,3 @@
 # uav
 
-Accurate copter dynamics and control in Rust.
+Accurate UAV dynamics and control in Rust.
