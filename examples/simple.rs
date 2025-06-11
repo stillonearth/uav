@@ -1,4 +1,4 @@
-use uav::{simulate_drone, Consts, Forces, State, Torques};
+use uav::dynamics::{simulate_drone, Consts, Forces, State, Torques};
 
 // Example usage
 fn main() {
