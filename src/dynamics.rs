@@ -1,6 +1,18 @@
 use fast_ode;
 use nalgebra::Vector3;
 
+/// Represents the complete state of a drone in 3D space.
+///
+/// This structure contains all the necessary state variables to describe a drone's
+/// position, velocity, orientation (Euler angles), and angular velocities at any
+/// given moment in time.
+///
+/// # Fields
+///
+/// * `position_x`, `position_y`, `position_z` - Position coordinates in the inertial frame (meters)
+/// * `velocity_x`, `velocity_y`, `velocity_z` - Linear velocities in the inertial frame (m/s)
+/// * `roll`, `pitch`, `yaw` - Euler angles representing orientation (radians)
+/// * `roll_rate`, `pitch_rate`, `yaw_rate` - Angular velocities in the body frame (rad/s)
 #[derive(Clone, Copy, Debug, Default)]
 pub struct State {
     pub position_x: f64,
@@ -17,6 +29,16 @@ pub struct State {
     pub yaw_rate: f64,
 }
 
+/// Physical constants and properties of the drone.
+///
+/// This structure contains the physical parameters needed for the drone dynamics
+/// simulation, including gravitational acceleration, mass, and moments of inertia.
+///
+/// # Fields
+///
+/// * `g` - Gravitational acceleration (m/s²)
+/// * `mass` - Total mass of the drone (kg)
+/// * `ixx`, `iyy`, `izz` - Principal moments of inertia about body axes (kg⋅m²)
 #[derive(Clone, Copy)]
 pub struct Consts {
     pub g: f64,
@@ -27,6 +49,23 @@ pub struct Consts {
 }
 
 impl State {
+    /// Converts the state structure to a fixed-size array.
+    ///
+    /// This method is useful for interfacing with numerical integration libraries
+    /// that expect state vectors as arrays.
+    ///
+    /// # Returns
+    ///
+    /// A 12-element array containing all state variables in the following order:
+    /// [pos_x, pos_y, pos_z, vel_x, vel_y, vel_z, roll, pitch, yaw, roll_rate, pitch_rate, yaw_rate]
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let state = State::default();
+    /// let array = state.to_array();
+    /// assert_eq!(array.len(), 12);
+    /// ```
     pub fn to_array(&self) -> [f64; 12] {
         [
             self.position_x as f64,
@@ -44,6 +83,26 @@ impl State {
         ]
     }
 
+    /// Creates a state structure from a fixed-size array.
+    ///
+    /// This method reconstructs a State from an array representation, typically
+    /// used after numerical integration to convert back from array format.
+    ///
+    /// # Arguments
+    ///
+    /// * `arr` - A 12-element array containing state variables in the same order as `to_array()`
+    ///
+    /// # Returns
+    ///
+    /// A new State instance with values from the input array
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let array = [1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 0.1, 0.2, 0.3, 0.0, 0.0, 0.0];
+    /// let state = State::from_array(&array);
+    /// assert_eq!(state.position_x, 1.0);
+    /// ```
     pub fn from_array(arr: &[f64; 12]) -> Self {
         State {
             position_x: arr[0],
@@ -62,6 +121,17 @@ impl State {
     }
 }
 
+/// Ordinary Differential Equation (ODE) system for drone dynamics.
+///
+/// This structure implements the mathematical model for a quadrotor drone using
+/// Newton's laws and Euler's equations of motion. It handles the transformation
+/// between body-fixed and inertial reference frames.
+///
+/// # Fields
+///
+/// * `consts` - Physical constants and drone properties
+/// * `forces` - Applied forces in the body frame (N)
+/// * `torques` - Applied torques about body axes (N⋅m)
 pub struct DroneOde {
     pub consts: Consts,
     pub forces: Vector3<f64>,
@@ -69,6 +139,34 @@ pub struct DroneOde {
 }
 
 impl fast_ode::DifferentialEquation<12> for DroneOde {
+    /// Computes the time derivatives of the state vector.
+    ///
+    /// This method implements the drone's equations of motion, including:
+    /// - Translational dynamics using Newton's second law
+    /// - Rotational dynamics using Euler's equations
+    /// - Kinematic relationships between Euler angles and angular velocities
+    /// - Body-to-inertial frame transformations
+    ///
+    /// # Arguments
+    ///
+    /// * `_t` - Current time (unused in this autonomous system)
+    /// * `y` - Current state vector as a 12-element coordinate
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// * The state derivative vector (dy/dt)
+    /// * A boolean indicating successful computation
+    ///
+    /// # Physics Implementation
+    ///
+    /// The method implements:
+    /// 1. Position derivatives: ẋ = v (velocity)
+    /// 2. Velocity derivatives: v̇ = F/m - g (Newton's second law with gravity)
+    /// 3. Attitude derivatives: Euler angle kinematic equations
+    /// 4. Angular velocity derivatives: Euler's rotational equations
+    ///
+    /// Special care is taken to avoid singularities at θ = ±π/2 (gimbal lock).
     fn ode_dot_y(&self, _t: f64, y: &fast_ode::Coord<12>) -> (fast_ode::Coord<12>, bool) {
         let state = y.0;
 
@@ -144,6 +242,43 @@ impl fast_ode::DifferentialEquation<12> for DroneOde {
     }
 }
 
+/// Simulates drone dynamics over a specified time interval.
+///
+/// This function performs numerical integration of the drone's equations of motion
+/// using an adaptive step-size ODE solver. It handles the complete 6-DOF dynamics
+/// including translational and rotational motion.
+///
+/// # Arguments
+///
+/// * `initial_state` - Starting state of the drone
+/// * `consts` - Physical parameters of the drone
+/// * `forces` - Applied forces in body frame (N) - typically from propellers
+/// * `torques` - Applied torques about body axes (N⋅m) - for attitude control
+/// * `time_span` - Tuple (t_start, t_end) defining integration interval (seconds)
+/// * `tolerance` - Absolute tolerance for the numerical integrator
+///
+/// # Returns
+///
+/// * `Ok(State)` - Final state after integration
+/// * `Err(&str)` - Error message if integration fails
+///
+/// # Example
+///
+/// ```rust
+/// let initial_state = State::default();
+/// let consts = Consts { g: 9.81, mass: 1.0, ixx: 0.1, iyy: 0.1, izz: 0.2 };
+/// let forces = Vector3::new(0.0, 0.0, 9.81); // Hover thrust
+/// let torques = Vector3::zeros();
+///
+/// let result = simulate_drone(initial_state, consts, forces, torques, (0.0, 1.0), 1e-6);
+/// ```
+///
+/// # Physics Notes
+///
+/// - Forces should be specified in the drone's body frame
+/// - Positive Z-force typically represents upward thrust
+/// - Gravity is automatically applied in the negative Z direction (inertial frame)
+/// - The simulation accounts for gyroscopic effects and attitude-dependent force directions
 pub fn simulate_drone(
     initial_state: State,
     consts: Consts,
@@ -179,6 +314,10 @@ pub fn simulate_drone(
 mod tests {
     use super::*;
 
+    /// Tests the drone's ability to maintain hover flight.
+    ///
+    /// This test verifies that when thrust equals weight and no torques are applied,
+    /// the drone maintains its initial altitude and has minimal vertical velocity.
     #[test]
     fn test_hover_simulation() {
         let initial_state = State {
@@ -217,6 +356,10 @@ mod tests {
         assert!(final_state.velocity_z.abs() < 0.1);
     }
 
+    /// Tests free fall dynamics with no applied forces.
+    ///
+    /// This test verifies the gravitational acceleration is correctly implemented
+    /// by comparing simulation results with analytical free fall equations.
     #[test]
     fn test_free_fall() {
         let initial_state = State {
