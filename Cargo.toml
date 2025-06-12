@@ -5,7 +5,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Accurate UAV simulation by integrating dynamics model "
 keywords = ["uav", "quadcopter"]
-repository = "https://github.com/stillonearth/bevy_urdf"
+repository = "https://github.com/stillonearth/uav"
 
 [dependencies]
 fast_ode = "1.0"
