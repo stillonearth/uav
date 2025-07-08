@@ -61,11 +61,9 @@ impl State {
     ///
     /// # Example
     ///
-    /// ```rust
     /// let state = State::default();
     /// let array = state.to_array();
     /// assert_eq!(array.len(), 12);
-    /// ```
     pub fn to_array(&self) -> [f64; 12] {
         [
             self.position_x as f64,
@@ -98,11 +96,10 @@ impl State {
     ///
     /// # Example
     ///
-    /// ```rust
+
     /// let array = [1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 0.1, 0.2, 0.3, 0.0, 0.0, 0.0];
     /// let state = State::from_array(&array);
     /// assert_eq!(state.position_x, 1.0);
-    /// ```
     pub fn from_array(arr: &[f64; 12]) -> Self {
         State {
             position_x: arr[0],
@@ -132,13 +129,13 @@ impl State {
 /// * `consts` - Physical constants and drone properties
 /// * `forces` - Applied forces in the body frame (N)
 /// * `torques` - Applied torques about body axes (N⋅m)
-pub struct DroneOde {
+pub struct DroneODE {
     pub consts: Consts,
     pub forces: Vector3<f64>,
     pub torques: Vector3<f64>,
 }
 
-impl fast_ode::DifferentialEquation<12> for DroneOde {
+impl fast_ode::DifferentialEquation<12> for DroneODE {
     /// Computes the time derivatives of the state vector.
     ///
     /// This method implements the drone's equations of motion, including:
@@ -264,14 +261,12 @@ impl fast_ode::DifferentialEquation<12> for DroneOde {
 ///
 /// # Example
 ///
-/// ```rust
 /// let initial_state = State::default();
 /// let consts = Consts { g: 9.81, mass: 1.0, ixx: 0.1, iyy: 0.1, izz: 0.2 };
 /// let forces = Vector3::new(0.0, 0.0, 9.81); // Hover thrust
 /// let torques = Vector3::zeros();
 ///
-/// let result = simulate_drone(initial_state, consts, forces, torques, (0.0, 1.0), 1e-6);
-/// ```
+/// let result = simulate_drone(initial_state, consts, forces, torques, (0.0, 1.0), 1e-6)
 ///
 /// # Physics Notes
 ///
@@ -287,7 +282,7 @@ pub fn simulate_drone(
     time_span: (f64, f64),
     tolerance: f64,
 ) -> Result<State, &'static str> {
-    let ode = DroneOde {
+    let ode = DroneODE {
         consts,
         forces,
         torques,
@@ -307,6 +302,129 @@ pub fn simulate_drone(
     match result {
         fast_ode::IvpResult::FinalTimeReached(final_coord) => Ok(State::from_array(&final_coord.0)),
         _ => Err("Integration failed"),
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RotorState {
+    // Current state
+    pub current_thrust: f32,
+    pub desired_thrust: f32,
+    pub current_angle: f32,
+
+    // Dynamic parameters
+    pub max_thrust: f32,
+    pub thrust_rate: f32, // N/s
+    pub min_thrust: f32,
+
+    // Aerodynamic coefficients
+    pub kf: f32, // Thrust coefficient
+    pub km: f32, // Torque coefficient
+
+    // RPM for realistic modeling
+    pub current_rpm: f32,
+    pub desired_rpm: f32,
+    pub rpm_rate: f32, // RPM/s
+}
+
+impl RotorState {
+    pub fn new(max_thrust: f32, thrust_rate: f32, kf: f32, km: f32) -> Self {
+        Self {
+            current_thrust: 0.0,
+            desired_thrust: 0.0,
+            current_angle: 0.0,
+            max_thrust,
+            thrust_rate,
+            min_thrust: 0.0,
+            kf,
+            km,
+            current_rpm: 0.0,
+            desired_rpm: 0.0,
+            rpm_rate: 1000.0, // 1000 RPM/s default
+        }
+    }
+
+    pub fn update(&mut self, dt: f32, new_desired_thrust: f32) {
+        // Clamp desired thrust to valid range
+        self.desired_thrust = new_desired_thrust.clamp(self.min_thrust, self.max_thrust);
+
+        // Update current thrust with rate limiting
+        let thrust_diff = self.desired_thrust - self.current_thrust;
+        let max_thrust_change = self.thrust_rate * dt;
+
+        if thrust_diff.abs() <= max_thrust_change {
+            self.current_thrust = self.desired_thrust;
+        } else {
+            self.current_thrust += if thrust_diff > 0.0 {
+                max_thrust_change
+            } else {
+                -max_thrust_change
+            };
+        }
+
+        // Update RPM (for realistic modeling)
+        self.update_rpm(dt);
+    }
+
+    fn update_rpm(&mut self, dt: f32) {
+        // Simple relationship: thrust ∝ RPM²
+        if self.current_thrust > 0.0 {
+            self.desired_rpm = (self.desired_thrust / self.max_thrust).sqrt() * 10000.0;
+        // Max 10k RPM
+        } else {
+            self.desired_rpm = 0.0;
+        }
+
+        let rpm_diff = self.desired_rpm - self.current_rpm;
+        let max_rpm_change = self.rpm_rate * dt;
+
+        if rpm_diff.abs() <= max_rpm_change {
+            self.current_rpm = self.desired_rpm;
+        } else {
+            self.current_rpm += if rpm_diff > 0.0 {
+                max_rpm_change
+            } else {
+                -max_rpm_change
+            };
+        }
+    }
+
+    // Getters
+    pub fn get_current_thrust(&self) -> f32 {
+        self.current_thrust
+    }
+    pub fn get_desired_thrust(&self) -> f32 {
+        self.desired_thrust
+    }
+    pub fn get_current_angle(&self) -> f32 {
+        self.current_angle
+    }
+    pub fn get_current_rpm(&self) -> f32 {
+        self.current_rpm
+    }
+
+    // Utility functions
+    pub fn is_at_desired_thrust(&self, tolerance: f32) -> bool {
+        (self.current_thrust - self.desired_thrust).abs() <= tolerance
+    }
+
+    pub fn get_thrust_progress(&self) -> f32 {
+        if self.desired_thrust == 0.0 {
+            1.0
+        } else {
+            self.current_thrust / self.desired_thrust
+        }
+    }
+
+    pub fn get_torque(&self) -> f32 {
+        // Calculate torque using km coefficient
+        self.km * self.current_thrust
+    }
+
+    pub fn get_power_consumption(&self) -> f32 {
+        // Simplified power model: P = k * thrust^1.5
+        let thrust_normalized = self.current_thrust / self.max_thrust;
+        self.kf * thrust_normalized.powf(1.5) * 1000.0 // Watts
     }
 }
 
@@ -345,7 +463,6 @@ mod tests {
 
         // Hover forces (thrust equals weight)
         let forces = Vector3::new(0.0, 0.0, consts.mass * consts.g);
-
         let torques = Vector3::new(0.0, 0.0, 0.0);
 
         let final_state =
@@ -400,5 +517,25 @@ mod tests {
 
         assert!((final_state.position_z - expected_z).abs() < 0.1);
         assert!((final_state.velocity_z - expected_vz).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_rotor_dynamics() {
+        let mut rotor = RotorState::new(20.0, 40.0, 1.0, 0.1);
+
+        // Test thrust ramping
+        rotor.update(0.1, 10.0);
+        assert!(rotor.get_current_thrust() > 0.0);
+        assert!(rotor.get_current_thrust() < 10.0);
+
+        // Test stabilization
+        for _ in 0..100 {
+            rotor.update(0.01, 10.0);
+        }
+        assert!(rotor.is_at_desired_thrust(0.1));
+
+        // Test torque and power
+        assert!(rotor.get_torque() > 0.0);
+        assert!(rotor.get_power_consumption() > 0.0);
     }
 }

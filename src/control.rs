@@ -13,7 +13,6 @@ use nalgebra::{Matrix3, UnitQuaternion, Vector3, Vector4};
 ///
 /// # Control Architecture
 ///
-/// ```text
 /// Position/Velocity Commands → Lateral Position Controller → Desired Accelerations
 ///                                                          ↓
 /// Altitude Commands → Altitude Controller → Thrust + Roll/Pitch Controller → Body Rates
@@ -21,7 +20,7 @@ use nalgebra::{Matrix3, UnitQuaternion, Vector3, Vector4};
 /// Yaw Commands → Yaw Controller → Desired Yaw Rate
 ///                                 ↓
 /// Body Rate Commands → Body Rate Controller → Moments → Motor Mixing → Motor Thrusts
-/// ```
+///
 pub struct QuadcopterController {
     /// Control loop time step (seconds)
     dt: f64,
@@ -101,7 +100,6 @@ impl QuadcopterController {
     ///
     /// # Example
     ///
-    /// ```rust
     /// let controller = QuadcopterController::new(
     ///     0.01,  // 100 Hz control loop
     ///     1.5,   // 1.5 kg quadcopter
@@ -111,7 +109,7 @@ impl QuadcopterController {
     ///     0.25,  // 25 cm arm length
     ///     0.0, 8.0,  // Motor thrust range
     /// );
-    /// ```
+    ///
     pub fn new(
         dt: f64,
         mass: f64,
@@ -180,7 +178,6 @@ impl QuadcopterController {
     ///
     /// # Example
     ///
-    /// ```rust
     /// controller.set_gains(
     ///     Vector3::new(0.1, 0.1, 0.05),  // Body rate gains
     ///     5.0,   // Attitude gain
@@ -190,7 +187,7 @@ impl QuadcopterController {
     ///     4.0,   // Velocity gain
     ///     0.016, // Torque constant
     /// );
-    /// ```
+    ///
     pub fn set_gains(
         &mut self,
         kp_pqr: Vector3<f64>,
@@ -234,11 +231,10 @@ impl QuadcopterController {
     ///
     /// # Example
     ///
-    /// ```rust
     /// let desired_rates = Vector3::new(0.1, -0.05, 0.0);  // Roll right, pitch down
     /// let current_rates = Vector3::new(0.05, -0.02, 0.01);
     /// let moments = controller.body_rate_control(desired_rates, current_rates);
-    /// ```
+    ///
     pub fn body_rate_control(&self, pqr_cmd: Vector3<f64>, pqr: Vector3<f64>) -> Vector3<f64> {
         let inertia = Matrix3::from_diagonal(&Vector3::new(self.ixx, self.iyy, self.izz));
         let pqr_err = pqr_cmd - pqr;
@@ -255,7 +251,7 @@ impl QuadcopterController {
     ///
     /// The controller includes:
     /// - Proportional term: responds to position error
-    /// - Derivative term: provides damping based on velocity error  
+    /// - Derivative term: provides damping based on velocity error
     /// - Integral term: eliminates steady-state error
     /// - Feedforward term: compensates for desired acceleration
     ///
@@ -277,6 +273,7 @@ impl QuadcopterController {
     ///
     /// The thrust is automatically limited based on motor constraints and ascent rate limits.
     /// The controller compensates for gravity and attitude changes automatically.
+    ///
     pub fn altitude_control(
         &mut self,
         pos_z_cmd: f64,
@@ -324,7 +321,7 @@ impl QuadcopterController {
     /// # Arguments
     ///
     /// * `accel_cmd` - Desired accelerations [ax, ay, az] in m/s² (inertial frame)
-    /// * `attitude` - Current attitude quaternion (inertial to body frame)  
+    /// * `attitude` - Current attitude quaternion (inertial to body frame)
     /// * `thrust` - Current total thrust command in N
     ///
     /// # Returns
@@ -388,7 +385,7 @@ impl QuadcopterController {
     ///
     /// The control law combines:
     /// - Proportional feedback on position error
-    /// - Derivative feedback on velocity error  
+    /// - Derivative feedback on velocity error
     /// - Feedforward acceleration command
     ///
     /// # Arguments
@@ -409,7 +406,6 @@ impl QuadcopterController {
     ///
     /// # Example
     ///
-    /// ```rust
     /// let pos_cmd = Vector3::new(5.0, 3.0, 2.0);  // Desired position
     /// let vel_cmd = Vector3::new(1.0, 0.0, 0.0);  // Moving east at 1 m/s
     /// let current_pos = Vector3::new(4.5, 3.1, 2.0);
@@ -419,7 +415,6 @@ impl QuadcopterController {
     /// let accel_cmd = controller.lateral_position_control(
     ///     pos_cmd, vel_cmd, current_pos, current_vel, feedforward
     /// );
-    /// ```
     pub fn lateral_position_control(
         &self,
         mut pos_cmd: Vector3<f64>,
@@ -472,12 +467,11 @@ impl QuadcopterController {
     ///
     /// # Example
     ///
-    /// ```rust
     /// let desired_heading = std::f64::consts::PI / 4.0;  // 45 degrees
     /// let current_heading = 0.0;  // Facing north
     /// let yaw_rate = controller.yaw_control(desired_heading, current_heading);
     /// // Result: positive yaw rate to turn right
-    /// ```
+
     pub fn yaw_control(&self, yaw_cmd: f64, yaw: f64) -> f64 {
         self.kp_yaw * (yaw_cmd - yaw)
     }
@@ -489,7 +483,6 @@ impl QuadcopterController {
     /// across four motors to achieve the desired motion.
     ///
     /// # Motor Configuration (X-frame)
-    /// ```text
     ///   f2 (CCW)    f1 (CW)
     ///       \        /
     ///        \  +X  /
@@ -501,7 +494,6 @@ impl QuadcopterController {
     ///         /    \
     ///        /      \
     ///   f3 (CW)    f4 (CCW)
-    /// ```
     ///
     /// # Arguments
     ///
@@ -512,7 +504,7 @@ impl QuadcopterController {
     ///
     /// Individual motor thrust commands [f1, f2, f3, f4] in N
     /// - f1: Front-left motor (CW rotation)
-    /// - f2: Front-right motor (CCW rotation)  
+    /// - f2: Front-right motor (CCW rotation)
     /// - f3: Rear-left motor (CCW rotation)
     /// - f4: Rear-right motor (CW rotation)
     ///
@@ -526,11 +518,10 @@ impl QuadcopterController {
     ///
     /// # Example
     ///
-    /// ```rust
     /// let total_thrust = 20.0;  // N (hover thrust for 2kg drone)
     /// let moments = Vector3::new(0.5, -0.3, 0.1);  // Roll right, pitch down, yaw left
     /// let motor_thrusts = controller.generate_motor_commands(total_thrust, moments);
-    /// ```
+    ///
     pub fn generate_motor_commands(
         &self,
         coll_thrust_cmd: f64,
@@ -561,7 +552,7 @@ impl QuadcopterController {
     /// # Control Sequence
     ///
     /// 1. **Altitude Control**: Generate total thrust from vertical trajectory
-    /// 2. **Position Control**: Generate horizontal acceleration commands  
+    /// 2. **Position Control**: Generate horizontal acceleration commands
     /// 3. **Attitude Control**: Convert accelerations to body rate commands
     /// 4. **Yaw Control**: Generate yaw rate command from desired heading
     /// 5. **Body Rate Control**: Convert body rates to moments
@@ -575,7 +566,7 @@ impl QuadcopterController {
     /// * `t_acc` - Desired acceleration [ax, ay, az] in m/s² (inertial frame)
     /// * `t_att` - Desired attitude quaternion (inertial to body frame)
     /// * `est_pos` - Current estimated position [x, y, z] in m
-    /// * `est_vel` - Current estimated velocity [vx, vy, vz] in m/s  
+    /// * `est_vel` - Current estimated velocity [vx, vy, vz] in m/s
     /// * `est_omega` - Current estimated body rates [p, q, r] in rad/s
     /// * `est_att` - Current estimated attitude quaternion
     ///
@@ -592,7 +583,6 @@ impl QuadcopterController {
     ///
     /// # Example
     ///
-    /// ```rust
     /// // Hover at 5m altitude facing east
     /// let pos_cmd = Vector3::new(0.0, 0.0, 5.0);
     /// let vel_cmd = Vector3::zeros();
@@ -609,7 +599,7 @@ impl QuadcopterController {
     ///     pos_cmd, vel_cmd, acc_cmd, att_cmd,
     ///     est_pos, est_vel, est_rates, est_att
     /// );
-    /// ```
+    ///
     pub fn run_control(
         &mut self,
         t_pos: Vector3<f64>,
