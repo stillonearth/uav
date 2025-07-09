@@ -311,16 +311,13 @@ pub struct RotorState {
     pub current_thrust: f32,
     pub desired_thrust: f32,
     pub current_angle: f32,
-
     // Dynamic parameters
     pub max_thrust: f32,
     pub thrust_rate: f32, // N/s
     pub min_thrust: f32,
-
     // Aerodynamic coefficients
     pub kf: f32, // Thrust coefficient
     pub km: f32, // Torque coefficient
-
     // RPM for realistic modeling
     pub current_rpm: f32,
     pub desired_rpm: f32,
@@ -351,7 +348,6 @@ impl RotorState {
         // Update current thrust with rate limiting
         let thrust_diff = self.desired_thrust - self.current_thrust;
         let max_thrust_change = self.thrust_rate * dt;
-
         if thrust_diff.abs() <= max_thrust_change {
             self.current_thrust = self.desired_thrust;
         } else {
@@ -364,20 +360,22 @@ impl RotorState {
 
         // Update RPM (for realistic modeling)
         self.update_rpm(dt);
+
+        // Update angle based on RPM (rotor rotates as it spins)
+        self.update_angle(dt);
     }
 
     fn update_rpm(&mut self, dt: f32) {
         // Simple relationship: thrust ∝ RPM²
         if self.current_thrust > 0.0 {
             self.desired_rpm = (self.desired_thrust / self.max_thrust).sqrt() * 10000.0;
-        // Max 10k RPM
+            // Max 10k RPM
         } else {
             self.desired_rpm = 0.0;
         }
 
         let rpm_diff = self.desired_rpm - self.current_rpm;
         let max_rpm_change = self.rpm_rate * dt;
-
         if rpm_diff.abs() <= max_rpm_change {
             self.current_rpm = self.desired_rpm;
         } else {
@@ -389,16 +387,34 @@ impl RotorState {
         }
     }
 
+    fn update_angle(&mut self, dt: f32) {
+        // Update angle based on current RPM
+        // Convert RPM to radians per second: RPM * (2π / 60)
+        let angular_velocity = self.current_rpm * (2.0 * std::f32::consts::PI / 60.0);
+
+        // Update angle and wrap around 2π
+        self.current_angle += angular_velocity * dt;
+        self.current_angle = self.current_angle % (2.0 * std::f32::consts::PI);
+
+        // Keep angle in [0, 2π) range
+        if self.current_angle < 0.0 {
+            self.current_angle += 2.0 * std::f32::consts::PI;
+        }
+    }
+
     // Getters
     pub fn get_current_thrust(&self) -> f32 {
         self.current_thrust
     }
+
     pub fn get_desired_thrust(&self) -> f32 {
         self.desired_thrust
     }
+
     pub fn get_current_angle(&self) -> f32 {
         self.current_angle
     }
+
     pub fn get_current_rpm(&self) -> f32 {
         self.current_rpm
     }

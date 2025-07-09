@@ -1,6 +1,6 @@
 [package]
 name = "uav"
-version = "0.1.3"
+version = "0.1.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Accurate UAV simulation by integrating dynamics model "
